@@ -244,15 +244,25 @@ if __name__ == '__main__':
 
     # pass 2: classes
     for class_ in classes:
-        app("declare class {} {{\n",fix_type(None,class_.name))
+        indent = ""
+        if class_.name != "Global":
+            app("declare class {} {{\n",fix_type(None,class_.name))
+            indent = "    "
+        else:
+            app("// Global functions\n\n")
+
         for method in class_.methods:
             desc = method.raw_description
             desc = desc.split("\n")
             desc = filter(lambda x:len(x)>0,desc)
-            desc = map(lambda x: "     * {}".format(x),desc)
+            desc = map(lambda x: "{} * {}".format(indent,x),desc)
             desc = "\n".join(desc)
-            app("    /**\n{}\n     */\n",desc)
-            app("    {}(",method.name)
+            app("{}/**\n{}\n {}*/\n",indent,desc,indent)
+
+            if class_.name == "Global":
+                app("{}declare function {}(",indent,method.name)
+            else:
+                app("{}{}(",indent,method.name)
             for i,param in enumerate(method.parameters):
                 app("{}: {}",fix_name(param.name),fix_type(param.name,param.data_type))
                 if(i<len(method.parameters)-1):
@@ -273,7 +283,11 @@ if __name__ == '__main__':
             if is_multi: app("]")
 
             app("\n\n")
-        app("}}\n\n")
+
+        if class_.name == "Global":
+            app("\n\n")
+        else:
+            app("}}\n\n")
 
     f = open("build/global.d.ts","w")
     f.write(globaldts)
