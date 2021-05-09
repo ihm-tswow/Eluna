@@ -188,7 +188,7 @@ if __name__ == '__main__':
         return t
 
     types = [
-        "number","boolean","string"
+        "number","boolean","string","function"
     ]
 
     for class_ in classes:
@@ -199,11 +199,13 @@ if __name__ == '__main__':
         if not t in types:
             t = "number"
         if n == "...": t = t+"[]"
+        if t == "function": t = "(...args: any[])=>any"
         return t
 
-    def fix_name(name):
-        if name == "function": return "func"
-        if name == "...": return "...args"
+    def fix_name(name,d):
+        if name == "function": name = "func"
+        if name == "...": name = "...args"
+        if "--default-args" in sys.argv and d != None: name = name+"?"
         return name
 
     if "--enums" in sys.argv:
@@ -264,7 +266,7 @@ if __name__ == '__main__':
             else:
                 app("{}{}(",indent,method.name)
             for i,param in enumerate(method.parameters):
-                app("{}: {}",fix_name(param.name),fix_type(param.name,param.data_type))
+                app("{}: {}",fix_name(param.name,param.default_value),fix_type(param.name,param.data_type))
                 if(i<len(method.parameters)-1):
                     app(", ")
             app(")")
