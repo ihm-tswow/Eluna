@@ -70,6 +70,7 @@ class MethodDoc(object):
         self.parameters = parameters
         self.returned = returned
 
+        self.raw_description = description
         # Parse the description as Markdown.
         self.description = markdown.markdown(description)
         # Pull the first paragraph out of the description as the short description.

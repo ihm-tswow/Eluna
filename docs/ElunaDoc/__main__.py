@@ -6,7 +6,8 @@ from typedecorator import params, returns
 from parser import ClassParser, MethodDoc
 import glob
 import time
-
+import re
+import sys
 
 @returns([(str, FileType)])
 @params(search_path=str)
@@ -167,3 +168,113 @@ if __name__ == '__main__':
         for method in class_.methods:
             method_path = '{}/{}.html'.format(class_.name, method.name)
             render('method.html', method_path, level=1, current_class=class_, current_method=method)
+
+    # ts-wow generation
+    enums = []
+    globaldts = ""
+    def app(str,*args):
+        global globaldts
+        globaldts+=(str.format(*args))
+
+
+    def translate_type(t):
+        t = t.translate(None,"[]")
+        if t == "Map":
+            return "EMap"
+        if t == "table":
+            return "any"
+        if t == "Object":
+            return "EObject"
+        return t
+
+    types = [
+        "number","boolean","string"
+    ]
+
+    for class_ in classes:
+        types.append(translate_type(class_.name))
+
+    def fix_type(n,t):
+        t = translate_type(t)
+        if not t in types:
+            t = "number"
+        if n == "...": t = t+"[]"
+        return t
+
+    def fix_name(name):
+        if name == "function": return "func"
+        if name == "...": return "...args"
+        return name
+
+    if "--enums" in sys.argv:
+        for class_ in classes:
+            for method in class_.methods:
+                desc = method.raw_description
+                desc = desc.split("\n")
+                in_enum = False
+                enum_text = ""
+                enum_name = ""
+                for i,v in enumerate(desc):
+                    # hackfix
+                    if v == "    EFFECT_MOTION_TYPE              = 16, // TC":
+                        v = "    EFFECT_MOTION_TYPE_TC           = 16, // TC"
+
+                    # style fixes
+                    if "        {" in v:
+                        v = v.replace("        {","    {")
+
+                    if "    enum" in v:
+                        v = v.replace("    enum","enum")
+
+                    enum_match = re.match("enum ([a-zA-Z]+)",v)
+                    if enum_match:
+                        in_enum = True
+                        enum_name = enum_match.group(1)
+
+                    if "enum " in v: in_enum = True
+                    if in_enum:
+                        enum_text+=v.translate(None,";")+"\n"
+                        if "}" in v:
+                            in_enum = False
+                            if not enum_name in enums:
+                                app("declare {}",enum_text)
+                                enums.append(enum_name)
+                                types.append(enum_name)
+                                enum_text = ""
+
+    # pass 2: classes
+    for class_ in classes:
+        app("declare class {} {{\n",fix_type(None,class_.name))
+        for method in class_.methods:
+            desc = method.raw_description
+            desc = desc.split("\n")
+            desc = filter(lambda x:len(x)>0,desc)
+            desc = map(lambda x: "     * {}".format(x),desc)
+            desc = "\n".join(desc)
+            app("    /**\n{}\n     */\n",desc)
+            app("    {}(",method.name)
+            for i,param in enumerate(method.parameters):
+                app("{}: {}",fix_name(param.name),fix_type(param.name,param.data_type))
+                if(i<len(method.parameters)-1):
+                    app(", ")
+            app(")")
+
+            if len(method.returned) > 0:
+                app(": ")
+
+            is_multi = len(method.returned) > 1
+            if is_multi: app("[")
+            for i,param in enumerate(method.returned):
+                app(fix_type(param.name,param.data_type))
+
+                if is_multi and i<len(method.returned)-1:
+                    app(", ")
+
+            if is_multi: app("]")
+
+            app("\n\n")
+        app("}}\n\n")
+
+    f = open("build/global.d.ts","w")
+    f.write(globaldts)
+    f.close()
